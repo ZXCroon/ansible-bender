@@ -4,10 +4,12 @@ import logging
 import os
 import traceback
 import pathlib
+import gc
 
 from ansible.executor.task_result import TaskResult
 from ansible.playbook.task import Task
 from ansible.plugins.callback import CallbackBase
+from ansible.template import Templar
 
 from ansible_bender.api import Application
 from ansible_bender.builders.base import BuildState
@@ -52,26 +54,43 @@ class CallbackModule(CallbackBase):
             return
         if not build.is_layering_on():
             return
-        content = self.get_task_content(task_result._task)
         if task_result.is_skipped() or getattr(task_result, "_result", {}).get("skip_reason", False):
-            a.record_progress(None, content, None, build_id=build.build_id)
+            a.record_progress(None, self._task_content, None, build_id=build.build_id)
             return
         # # alternatively, we can guess it's a file action and do getattr(task, "src")
         # # most of the time ansible says changed=True even when the file is the same
         if task_result._task.action in FILE_ACTIONS:
             if not task_result.is_changed():
-                status = a.maybe_load_from_cache(content, build_id=build.build_id)
+                status = a.maybe_load_from_cache(self._task_content, build_id=build.build_id)
                 if status:
                     self._display.display("loaded from cache: '%s'" % status)
                     return
-        image_name = a.cache_task_result(content, build)
+        image_name = a.cache_task_result(self._task_content, build)
         if image_name:
             self._display.display("caching the task result in an image '%s'" % image_name)
 
     @staticmethod
     def get_task_content(task: Task):
+
+        def get_templated_ds(task: Task):
+            try:
+                required_fields = ["_loader", "_shared_loader_obj", "_task_vars"]
+                worker_process_dict = None
+                for referrer in gc.get_referrers(task):
+                    if isinstance(referrer, dict) and all([field in referrer for field in required_fields]):
+                        worker_process_dict = referrer
+                        break
+                templar = Templar(
+                    loader=worker_process_dict["_loader"],
+                    shared_loader_obj=worker_process_dict["_shared_loader_obj"],
+                    variables=worker_process_dict["_task_vars"],
+                )
+                return templar.template(task.get_ds())
+            except:
+                return task.get_ds()
+
         sha512 = hashlib.sha512()
-        serialized_data = task.get_ds()
+        serialized_data = get_templated_ds(task)
         if not serialized_data:
             # ansible 2.8
             serialized_data = task.dump_attrs()
@@ -153,9 +172,8 @@ class CallbackModule(CallbackBase):
             return
         if not build.is_layering_on():
             return
-        content = self.get_task_content(task)
-        logger.debug("hash = %s", content)
-        status = a.maybe_load_from_cache(content, build_id=build.build_id)
+        logger.debug("hash = %s", self._task_content)
+        status = a.maybe_load_from_cache(self._task_content, build_id=build.build_id)
         if status:
             self._display.display("loaded from cache: '%s'" % status)
             task.when = "0"  # skip
@@ -165,7 +183,8 @@ class CallbackModule(CallbackBase):
         a, build = self._get_app_and_build()
         a.db.record_build(build, build_state=BuildState.FAILED)
 
-    def v2_playbook_on_task_start(self, task, is_conditional):
+    def v2_runner_on_start(self, host, task):
+        self._task_content = self.get_task_content(task)
         try:
             return self._maybe_load_from_cache(task)
         except Exception as ex:
