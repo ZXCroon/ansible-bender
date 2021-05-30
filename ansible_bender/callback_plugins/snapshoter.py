@@ -73,11 +73,25 @@ class CallbackModule(CallbackBase):
     def get_task_content(task: Task):
 
         def get_templated_ds(task: Task):
+            # To get the correct fingerprint of a task,
+            # we need to do the jinja2 templating for its ds.
+            # The untemplated ds, if containing vars, will stay the same even if values of vars changed.
+            #
+            # We use ansible.template.Templar to help us do the templating,
+            # similar to what is done in ansible.executor.task_executor.
+            # However, the params needed by Templar (loader, shared_loader_obj, variables)
+            # are not easily-obtainable via Task object.
+            #
+            # The hacky solution to this is to use ansible.executor.process.worker.WorkerProcess obj.
+            # These params can be found in this obj.
+            # The WorkerProcess obj references the Task obj while running,
+            # so we can use gc.get_referrers method to find the WorkerProcess obj based on Task obj.
             try:
                 required_fields = ["_loader", "_shared_loader_obj", "_task_vars"]
                 worker_process_dict = None
                 for referrer in gc.get_referrers(task):
                     if isinstance(referrer, dict) and all([field in referrer for field in required_fields]):
+                        # Found the WorkerProcess obj referencing this Task obj.
                         worker_process_dict = referrer
                         break
                 templar = Templar(
