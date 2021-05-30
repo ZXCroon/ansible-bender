@@ -172,7 +172,7 @@ class CallbackModule(CallbackBase):
             logger.error("error while running the build: %s", ex)
             self.abort_build()
 
-    def v2_on_any(self, *args, **kwargs):
+    def runner_on_ok_or_skipped(self, *args, **kwargs):
         try:
             first_arg = args[0]
         except IndexError:
@@ -183,3 +183,9 @@ class CallbackModule(CallbackBase):
             except Exception as ex:
                 logger.error("error while running the build: %s", ex)
                 self.abort_build()
+
+    def v2_runner_on_ok(self, *args, **kwargs):
+        self.runner_on_ok_or_skipped(*args, **kwargs)
+
+    def v2_runner_on_skipped(self, *args, **kwargs):
+        self.runner_on_ok_or_skipped(*args, **kwargs)
