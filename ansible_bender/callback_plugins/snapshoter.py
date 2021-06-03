@@ -39,8 +39,10 @@ class CallbackModule(CallbackBase):
 
         :param task_result: instance of TaskResult
         """
-        if task_result._task.action in ["setup", "gather_facts"]:
+        if task_result._task.action in ["setup", "gather_facts", "include_role", "include_tasks"]:
             # we ignore setup
+            # for include_role and include_tasks
+            # ignore the parsing task and only cache following tasks in included file
             return
         if task_result.is_failed() or task_result._result.get("rc", 0) > 0:
             return
@@ -165,8 +167,10 @@ class CallbackModule(CallbackBase):
 
         :param task: instance of Task
         """
-        if task.action in ["setup", "gather_facts"]:
+        if task.action in ["setup", "gather_facts", "include_role", "include_tasks"]:
             # we ignore setup
+            # for include_role and include_tasks
+            # ignore the parsing task and only cache following tasks in included file
             return
         a, build = self._get_app_and_build()
         if build.is_failed():
