@@ -13,7 +13,7 @@ from ansible.template import Templar
 
 from ansible_bender.api import Application
 from ansible_bender.builders.base import BuildState
-from ansible_bender.constants import NO_CACHE_TAG
+from ansible_bender.constants import NO_CACHE_TAG, SKIP_CACHE_TAG
 
 FILE_ACTIONS = ["file", "copy", "synchronize", "unarchive", "template"]
 logger = logging.getLogger("ansible_bender")
@@ -43,6 +43,8 @@ class CallbackModule(CallbackBase):
             # we ignore setup
             # for include_role and include_tasks
             # ignore the parsing task and only cache following tasks in included file
+            return
+        if SKIP_CACHE_TAG in getattr(task_result._task, "tags", []):
             return
         if task_result.is_failed() or task_result._result.get("rc", 0) > 0:
             return
@@ -171,6 +173,8 @@ class CallbackModule(CallbackBase):
             # we ignore setup
             # for include_role and include_tasks
             # ignore the parsing task and only cache following tasks in included file
+            return
+        if SKIP_CACHE_TAG in getattr(task, "tags", []):
             return
         a, build = self._get_app_and_build()
         if build.is_failed():
