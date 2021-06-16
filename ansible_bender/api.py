@@ -195,7 +195,8 @@ class Application:
         build = self.db.get_build(build_id)
         builder = self.get_builder(build)
 
-        if not build.cache_tasks:
+        if not build.cache_tasks or not build.was_last_layer_cached():
+            builder.swap_working_container()
             return
 
         base_image_id, layer_id = self.record_progress(build, content, None)

@@ -190,8 +190,6 @@ class CallbackModule(CallbackBase):
             build.cache_tasks = False
             a.db.record_build(build)
             return
-        if not build.was_last_layer_cached():
-            return
         if not build.is_layering_on():
             return
         logger.debug("hash = %s", self._task_content)
