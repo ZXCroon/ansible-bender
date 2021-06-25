@@ -103,7 +103,13 @@ class CallbackModule(CallbackBase):
                     shared_loader_obj=worker_process_dict["_shared_loader_obj"],
                     variables=worker_process_dict["_task_vars"],
                 )
-                return templar.template(task.get_ds())
+                task_ds = task.get_ds()
+                if "when" in task_ds:
+                    try:
+                        task_ds["when"] = str(task.evaluate_conditional(templar, worker_process_dict["_task_vars"]))
+                    except:
+                        pass
+                return templar.template(task_ds)
             except:
                 return task.get_ds()
 
